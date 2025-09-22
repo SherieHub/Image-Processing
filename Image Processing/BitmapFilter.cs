@@ -51,22 +51,60 @@ namespace Image_Processing
             }
         }
 
-        public static int[] GetHistogram(Bitmap bmp)
+        public static int[][] GetRGBHistogram(Bitmap bmp)
         {
-            int[] histogram = new int[256];
+            int[][] hist = new int[3][]; 
+            hist[0] = new int[256]; 
+            hist[1] = new int[256]; 
+            hist[2] = new int[256]; 
 
             for (int y = 0; y < bmp.Height; y++)
             {
                 for (int x = 0; x < bmp.Width; x++)
                 {
                     Color c = bmp.GetPixel(x, y);
-                    int gray = (int)((c.R + c.G + c.B) / 3.0);
-                    histogram[gray]++;
+                    hist[0][c.R]++;
+                    hist[1][c.G]++;
+                    hist[2][c.B]++;
                 }
             }
-
-            return histogram;
+            return hist;
         }
+
+        public static Bitmap DrawRGBHistogram(int[][] hist)
+        {
+            int width = 512;   
+            int height = 200;
+            Bitmap histImage = new Bitmap(width, height);
+
+            using (Graphics g = Graphics.FromImage(histImage))
+            {
+                g.Clear(Color.White);
+
+                int max = 0;
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 256; j++)
+                        if (hist[i][j] > max) max = hist[i][j];
+
+                for (int i = 0; i < 256; i++)
+                {
+                    float rIntensity = (float)hist[0][i] / max;
+                    float gIntensity = (float)hist[1][i] / max;
+                    float bIntensity = (float)hist[2][i] / max;
+
+                    int rHeight = (int)(rIntensity * height);
+                    int gHeight = (int)(gIntensity * height);
+                    int bHeight = (int)(bIntensity * height);
+
+                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Red)), i * 2, height, i * 2, height - rHeight);
+                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Green)), i * 2 + 1, height, i * 2 + 1, height - gHeight);
+                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Blue)), i * 2, height, i * 2, height - bHeight);
+                }
+            }
+            return histImage;
+        }
+
+
 
         public static Bitmap GreenScreen(Bitmap greenscreenImage, Bitmap background)
         {

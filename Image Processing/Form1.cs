@@ -11,7 +11,6 @@ namespace Image_Processing
 {
     public partial class Form1 : Form
     {
-        // Store images as Bitmap consistently
         Bitmap greenscreenImage, backgroundImage, loadedImage, resultingImage1, resultingImage2;
         private VideoCapture capture;
         private bool capturing = false;
@@ -45,14 +44,11 @@ namespace Image_Processing
             {
                 Bitmap bmp = new Bitmap(openFileDialog1.FileName);
 
-                // set image in PictureBox
                 targetBox.Image = bmp;
 
-                // reset processed pictureBox
                 if (clearBox != null)
                     clearBox.Image = null;
 
-                // ensure all boxes zoom properly
                 pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
                 pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
                 pictureBox3.SizeMode = PictureBoxSizeMode.Zoom;
@@ -149,8 +145,8 @@ namespace Image_Processing
         {
             if (loadedImage != null)
             {
-                resultingImage1 = (Bitmap)loadedImage.Clone();
-                BitmapFilter.GetHistogram(resultingImage1);
+                int[][] hist = BitmapFilter.GetRGBHistogram(loadedImage);
+                resultingImage1 = BitmapFilter.DrawRGBHistogram(hist);
                 pictureBox2.Image = resultingImage1;
             }
             else
@@ -225,12 +221,10 @@ namespace Image_Processing
 
             if (greenscreenImage != null)
             {
-                // Case 1: User loaded a static greenscreen image
                 foreground = (Bitmap)greenscreenImage.Clone();
             }
             else if (pictureBox3.Image != null)
             {
-                // Case 2: Webcam is running → use current frame as greenscreen
                 foreground = new Bitmap(pictureBox3.Image);
             }
 
@@ -272,7 +266,7 @@ namespace Image_Processing
 
         private void startWebcamToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            capture = new VideoCapture(0); // 0 = default camera
+            capture = new VideoCapture(0); 
             if (!capture.IsOpened())
             {
                 MessageBox.Show("No webcam detected!");
@@ -289,10 +283,8 @@ namespace Image_Processing
                         capture.Read(mat);
                         if (!mat.Empty())
                         {
-                            // Convert Mat to Bitmap
                             Bitmap frame = BitmapConverter.ToBitmap(mat);
 
-                            // Update PictureBox on UI thread
                             pictureBox1.Invoke(new Action(() =>
                             {
                                 pictureBox3.Image?.Dispose();
@@ -308,13 +300,9 @@ namespace Image_Processing
         {
             if (pictureBox3.Image != null)
             {
-                // Clone the current frame so it becomes static
                 Bitmap snapshot = new Bitmap(pictureBox3.Image);
-
-                // Show it in the PictureBox (stops updating live feed)
                 pictureBox5.Image = snapshot;
 
-                // Stop the live capture
                 capturing = false;
                 capture?.Release();
                 capture?.Dispose();
