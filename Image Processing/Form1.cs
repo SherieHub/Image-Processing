@@ -266,7 +266,7 @@ namespace Image_Processing
 
         private void startWebcamToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            capture = new VideoCapture(0); 
+            capture = new VideoCapture(0);
             if (!capture.IsOpened())
             {
                 MessageBox.Show("No webcam detected!");
@@ -312,6 +312,36 @@ namespace Image_Processing
             else
             {
                 MessageBox.Show("No webcam frame available to capture!");
+            }
+        }
+
+        private void stopWebcamToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!capturing)
+            {
+                MessageBox.Show("Webcam is not running!");
+                return;
+            }
+
+            try
+            {
+                capturing = false;
+
+                capture?.Release();
+                capture?.Dispose();
+                capture = null;
+
+                if (pictureBox3.Image != null)
+                {
+                    pictureBox3.Image.Dispose();
+                    pictureBox3.Image = null;
+                }
+
+                MessageBox.Show("Webcam stopped successfully.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error stopping webcam: " + ex.Message);
             }
         }
 

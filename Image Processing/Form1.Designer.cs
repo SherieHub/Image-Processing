@@ -52,7 +52,6 @@
             loadBackgroundToolStripMenuItem = new ToolStripMenuItem();
             saveImageToolStripMenuItem = new ToolStripMenuItem();
             exitToolStripMenuItem1 = new ToolStripMenuItem();
-            fileToolStripMenuItem = new ToolStripMenuItem();
             applySubtractionToolStripMenuItem = new ToolStripMenuItem();
             webCamToolStripMenuItem = new ToolStripMenuItem();
             startWebcamToolStripMenuItem = new ToolStripMenuItem();
@@ -245,7 +244,7 @@
             // menuStrip1
             // 
             menuStrip1.ImageScalingSize = new Size(20, 20);
-            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem1, fileToolStripMenuItem, applySubtractionToolStripMenuItem, webCamToolStripMenuItem });
+            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem1, applySubtractionToolStripMenuItem, webCamToolStripMenuItem });
             menuStrip1.Location = new Point(3, 3);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Size = new Size(1164, 28);
@@ -287,11 +286,6 @@
             exitToolStripMenuItem1.Text = "Exit";
             exitToolStripMenuItem1.Click += exitToolStripMenuItem1_Click;
             // 
-            // fileToolStripMenuItem
-            // 
-            fileToolStripMenuItem.Name = "fileToolStripMenuItem";
-            fileToolStripMenuItem.Size = new Size(14, 24);
-            // 
             // applySubtractionToolStripMenuItem
             // 
             applySubtractionToolStripMenuItem.Name = "applySubtractionToolStripMenuItem";
@@ -318,6 +312,7 @@
             stopWebcamToolStripMenuItem.Name = "stopWebcamToolStripMenuItem";
             stopWebcamToolStripMenuItem.Size = new Size(224, 26);
             stopWebcamToolStripMenuItem.Text = "Stop Webcam";
+            stopWebcamToolStripMenuItem.Click += stopWebcamToolStripMenuItem_Click;
             // 
             // captureFrameToolStripMenuItem
             // 
@@ -431,7 +426,6 @@
         private TabControl cqwc;
         private TabPage tabPage2;
         private MenuStrip menuStrip1;
-        private ToolStripMenuItem fileToolStripMenuItem;
         private ToolStripMenuItem loadGreenScreenToolStripMenuItem_Click;
         private ToolStripMenuItem loadBackgroundToolStripMenuItem_Click;
         private ToolStripMenuItem saveToolStripMenuItem_Click;
