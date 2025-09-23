@@ -71,38 +71,71 @@ namespace Image_Processing
             return hist;
         }
 
-        public static Bitmap DrawRGBHistogram(int[][] hist)
+        //public static Bitmap DrawRGBHistogram(int[][] hist)
+        //{
+        //    int width = 512;   
+        //    int height = 200;
+        //    Bitmap histImage = new Bitmap(width, height);
+
+        //    using (Graphics g = Graphics.FromImage(histImage))
+        //    {
+        //        g.Clear(Color.White);
+
+        //        int max = 0;
+        //        for (int i = 0; i < 3; i++)
+        //            for (int j = 0; j < 256; j++)
+        //                if (hist[i][j] > max) max = hist[i][j];
+
+        //        for (int i = 0; i < 256; i++)
+        //        {
+        //            float rIntensity = (float)hist[0][i] / max;
+        //            float gIntensity = (float)hist[1][i] / max;
+        //            float bIntensity = (float)hist[2][i] / max;
+
+        //            int rHeight = (int)(rIntensity * height);
+        //            int gHeight = (int)(gIntensity * height);
+        //            int bHeight = (int)(bIntensity * height);
+
+        //            g.DrawLine(new Pen(Color.FromArgb(180, Color.Red)), i * 2, height, i * 2, height - rHeight);
+        //            g.DrawLine(new Pen(Color.FromArgb(180, Color.Green)), i * 2 + 1, height, i * 2 + 1, height - gHeight);
+        //            g.DrawLine(new Pen(Color.FromArgb(180, Color.Blue)), i * 2, height, i * 2, height - bHeight);
+        //        }
+        //    }
+        //    return histImage;
+        //}
+
+        public static Bitmap DrawRGBHistogram(int[][] hist, int width, int height)
         {
-            int width = 512;   
-            int height = 200;
-            Bitmap histImage = new Bitmap(width, height);
-
-            using (Graphics g = Graphics.FromImage(histImage))
+            Bitmap bmp = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(bmp))
             {
-                g.Clear(Color.White);
+                g.Clear(Color.Black);
 
-                int max = 0;
-                for (int i = 0; i < 3; i++)
-                    for (int j = 0; j < 256; j++)
-                        if (hist[i][j] > max) max = hist[i][j];
+                int max = hist.Max(h => h.Max());
+                if (max == 0) max = 1;
+
+                Pen redPen = new Pen(Color.Red);
+                Pen greenPen = new Pen(Color.Green);
+                Pen bluePen = new Pen(Color.Blue);
 
                 for (int i = 0; i < 256; i++)
                 {
-                    float rIntensity = (float)hist[0][i] / max;
-                    float gIntensity = (float)hist[1][i] / max;
-                    float bIntensity = (float)hist[2][i] / max;
+                    int rHeight = (int)(hist[0][i] * (height - 1) / max);
+                    int gHeight = (int)(hist[1][i] * (height - 1) / max);
+                    int bHeight = (int)(hist[2][i] * (height - 1) / max);
 
-                    int rHeight = (int)(rIntensity * height);
-                    int gHeight = (int)(gIntensity * height);
-                    int bHeight = (int)(bIntensity * height);
+                    // Scale X across the width
+                    int x = i * width / 256;
 
-                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Red)), i * 2, height, i * 2, height - rHeight);
-                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Green)), i * 2 + 1, height, i * 2 + 1, height - gHeight);
-                    g.DrawLine(new Pen(Color.FromArgb(180, Color.Blue)), i * 2, height, i * 2, height - bHeight);
+                    g.DrawLine(redPen, x, height - 1, x, height - 1 - rHeight);
+                    g.DrawLine(greenPen, x, height - 1, x, height - 1 - gHeight);
+                    g.DrawLine(bluePen, x, height - 1, x, height - 1 - bHeight);
                 }
             }
-            return histImage;
+            return bmp;
         }
+
+
 
 
 

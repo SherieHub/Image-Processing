@@ -1,24 +1,114 @@
-﻿using OpenCvSharp;
-using OpenCvSharp.Extensions;
+﻿
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Threading;
+using WebCamLib;
 
 namespace Image_Processing
 {
     public partial class Form1 : Form
     {
         Bitmap greenscreenImage, backgroundImage, loadedImage, resultingImage1, resultingImage2;
-        private VideoCapture capture;
-        private bool capturing = false;
+        private Bitmap resultingWebcamFrame; 
+        private Bitmap capturedFrame;
+
+        private Device[] devices;
+        private Device activeDevice;
+
+        private System.Windows.Forms.Timer processingTimer;
+        private enum WebcamFilter
+        {
+            None,
+            GrayScale,
+            Invert,
+            Sepia,
+            Histogram
+        }
+
+        private WebcamFilter currentFilter = WebcamFilter.None;
 
         public Form1()
         {
             InitializeComponent();
+
+            processingTimer = new System.Windows.Forms.Timer();
+            processingTimer.Interval = 100; 
+            processingTimer.Tick += ProcessingTimer_Tick;
+            processingTimer.Start();
         }
+
+        private void ProcessingTimer_Tick(object sender, EventArgs e)
+        {
+            if (activeDevice == null) return;
+
+            try
+            {
+                activeDevice.Sendmessage();
+                IDataObject data = Clipboard.GetDataObject();
+
+                if (data == null || !data.GetDataPresent(DataFormats.Bitmap)) return;
+
+                capturedFrame?.Dispose();
+                capturedFrame = (Bitmap)data.GetData(DataFormats.Bitmap);
+
+                if (capturedFrame != null)
+                {
+                    panel1.BackgroundImage?.Dispose();
+                    panel1.BackgroundImage = (Bitmap)capturedFrame.Clone();
+                    panel1.BackgroundImageLayout = ImageLayout.Stretch;
+                }
+
+                if (currentFilter == WebcamFilter.None) return;
+
+                Bitmap processedFrame = null;
+
+                if (capturedFrame != null)
+                {
+                    switch (currentFilter)
+                    {
+                        case WebcamFilter.GrayScale:
+                            processedFrame = (Bitmap)capturedFrame.Clone();
+                            BitmapFilter.GrayScale(processedFrame);
+                            break;
+
+                        case WebcamFilter.Invert:
+                            processedFrame = (Bitmap)capturedFrame.Clone();
+                            BitmapFilter.Invert(processedFrame);
+                            break;
+
+                        case WebcamFilter.Sepia:
+                            processedFrame = (Bitmap)capturedFrame.Clone();
+                            BitmapFilter.Sepia(processedFrame);
+                            break;
+
+                        case WebcamFilter.Histogram:
+                            int[][] hist = BitmapFilter.GetRGBHistogram(capturedFrame);
+                            processedFrame = BitmapFilter.DrawRGBHistogram(hist, panel2.Width, panel2.Height);
+                            panel2.BackColor = Color.Black; 
+                            break;
+                    }
+
+                    panel2.BackgroundImage?.Dispose();
+                    panel2.BackgroundImage = processedFrame;
+                    panel2.BackgroundImageLayout = ImageLayout.Stretch;
+
+                    resultingWebcamFrame?.Dispose();
+                    resultingWebcamFrame = (Bitmap)processedFrame.Clone();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("ProcessingTimer error: " + ex.Message);
+            }
+        }
+
+
+
 
         private void loadToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -146,14 +236,22 @@ namespace Image_Processing
             if (loadedImage != null)
             {
                 int[][] hist = BitmapFilter.GetRGBHistogram(loadedImage);
-                resultingImage1 = BitmapFilter.DrawRGBHistogram(hist);
+                resultingImage1 = BitmapFilter.DrawRGBHistogram(hist, pictureBox2.Width, pictureBox2.Height);
                 pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.StretchImage;
+            }
+            else if (capturedFrame != null)
+            {
+                currentFilter = WebcamFilter.Histogram; 
             }
             else
             {
-                MessageBox.Show("Load an image before applying Histogram!");
+                MessageBox.Show("No image or webcam frame available for Histogram!");
             }
         }
+
+
+
 
         private void sepiaToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -211,34 +309,45 @@ namespace Image_Processing
 
         private void applySubtractionToolStripMenuItem_Click(object sender, EventArgs e)
         {
+
             if (backgroundImage == null)
             {
                 MessageBox.Show("Load a background image first!");
                 return;
             }
 
-            Bitmap foreground = null;
-
-            if (greenscreenImage != null)
+            if (pictureBox3.Image == null)
             {
-                foreground = (Bitmap)greenscreenImage.Clone();
-            }
-            else if (pictureBox3.Image != null)
-            {
-                foreground = new Bitmap(pictureBox3.Image);
+                MessageBox.Show("No image available!");
+                return;
             }
 
-            if (foreground != null)
+            Bitmap fg = new Bitmap(pictureBox3.Image);
+
+            try
             {
-                resultingImage2 = BitmapFilter.GreenScreen(foreground, backgroundImage);
+                Bitmap newResult = BitmapFilter.GreenScreen(fg, backgroundImage);
+
+                if (resultingImage2 != null)
+                {
+                    resultingImage2.Dispose();
+                    resultingImage2 = null;
+                }
+
+                if (pictureBox5.Image != null)
+                {
+                    pictureBox5.Image.Dispose();
+                    pictureBox5.Image = null;
+                }
+
+                resultingImage2 = newResult;
                 pictureBox5.Image = resultingImage2;
             }
-            else
+            finally
             {
-                MessageBox.Show("No greenscreen image or webcam feed available!");
+                fg.Dispose();
             }
         }
-
 
         private void exitToolStripMenuItem1_Click(object sender, EventArgs e)
         {
@@ -264,84 +373,133 @@ namespace Image_Processing
             }
         }
 
-        private void startWebcamToolStripMenuItem_Click(object sender, EventArgs e)
+        private void startWebCamToolStripMenuItem1_Click(object sender, EventArgs e)
         {
-            capture = new VideoCapture(0);
-            if (!capture.IsOpened())
+            if (activeDevice != null)
+            {
+                MessageBox.Show("Webcam already running!");
+                return;
+            }
+
+            devices = DeviceManager.GetAllDevices();
+            if (devices.Length == 0)
             {
                 MessageBox.Show("No webcam detected!");
                 return;
             }
 
-            capturing = true;
-            Task.Run(() =>
-            {
-                using (var mat = new Mat())
-                {
-                    while (capturing)
-                    {
-                        capture.Read(mat);
-                        if (!mat.Empty())
-                        {
-                            Bitmap frame = BitmapConverter.ToBitmap(mat);
-
-                            pictureBox1.Invoke(new Action(() =>
-                            {
-                                pictureBox3.Image?.Dispose();
-                                pictureBox3.Image = frame;
-                            }));
-                        }
-                    }
-                }
-            });
-        }
-
-        private void captureFrameToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            if (pictureBox3.Image != null)
-            {
-                Bitmap snapshot = new Bitmap(pictureBox3.Image);
-                pictureBox5.Image = snapshot;
-
-                capturing = false;
-                capture?.Release();
-                capture?.Dispose();
-
-                MessageBox.Show("Frame captured as static image.");
-            }
-            else
-            {
-                MessageBox.Show("No webcam frame available to capture!");
-            }
-        }
-
-        private void stopWebcamToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            if (!capturing)
-            {
-                MessageBox.Show("Webcam is not running!");
-                return;
-            }
+            activeDevice = Array.Find(devices, d => d.Name.Contains("ManyCam")) ?? devices[0];
 
             try
             {
-                capturing = false;
-
-                capture?.Release();
-                capture?.Dispose();
-                capture = null;
-
-                if (pictureBox3.Image != null)
-                {
-                    pictureBox3.Image.Dispose();
-                    pictureBox3.Image = null;
-                }
-
-                MessageBox.Show("Webcam stopped successfully.");
+                activeDevice.ShowWindow(panel1); 
+                panel1.Refresh();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error stopping webcam: " + ex.Message);
+                MessageBox.Show("Failed to start webcam: " + ex.Message);
+                activeDevice = null;
+            }
+        }
+
+        private void stopToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (activeDevice == null) return;
+
+            try
+            {
+                activeDevice.Stop();
+                panel1.BackgroundImage?.Dispose();
+                panel1.BackgroundImage = null;
+
+                panel2.BackgroundImage?.Dispose();
+                panel2.BackgroundImage = null;
+
+                activeDevice = null;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to stop webcam: " + ex.Message);
+            }
+        }
+
+        private void captureToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (resultingWebcamFrame == null)
+            {
+                MessageBox.Show("No processed frame available to capture.");
+                return;
+            }
+
+            pictureBox6.Image?.Dispose();
+
+            Bitmap resizedCapture = new Bitmap(resultingWebcamFrame, panel2.Width, panel2.Height);
+
+            pictureBox6.Image = resizedCapture;
+            pictureBox6.SizeMode = PictureBoxSizeMode.StretchImage;
+        }
+
+        private void grayScaleToolStripMenuItem_Click_1(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.GrayScale;
+        }
+
+        private void invertColorsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Invert;
+        }
+
+        private void sepiaToolStripMenuItem_Click_1(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Sepia;
+        }
+
+        // Optional: Reset to original
+        private void noFilterToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.None;
+        }
+
+        private void saveToolStripMenuItem_Click_1(object sender, EventArgs e)
+        {
+            if (pictureBox6.Image == null)
+            {
+                MessageBox.Show("No captured image to save!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+            {
+                saveFileDialog.Title = "Save Captured Image";
+                saveFileDialog.Filter = "PNG Image|*.png|JPEG Image|*.jpg|Bitmap Image|*.bmp";
+                saveFileDialog.DefaultExt = "png";
+
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        string ext = System.IO.Path.GetExtension(saveFileDialog.FileName).ToLower();
+                        System.Drawing.Imaging.ImageFormat format = System.Drawing.Imaging.ImageFormat.Png;
+
+                        switch (ext)
+                        {
+                            case ".jpg":
+                            case ".jpeg":
+                                format = System.Drawing.Imaging.ImageFormat.Jpeg;
+                                break;
+                            case ".bmp":
+                                format = System.Drawing.Imaging.ImageFormat.Bmp;
+                                break;
+                        }
+
+                        pictureBox6.Image.Save(saveFileDialog.FileName, format);
+                        MessageBox.Show("Captured image saved successfully!", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Error saving image: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
             }
         }
 
