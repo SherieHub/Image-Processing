@@ -1,26 +1,21 @@
-﻿
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Threading;
-using WebCamLib;
+using Emgu.CV;
+using Emgu.CV.CvEnum;
+using Emgu.CV.Structure;
 
 namespace Image_Processing
 {
     public partial class Form1 : Form
     {
-        Bitmap greenscreenImage, backgroundImage, loadedImage, resultingImage1, resultingImage2;
-        private Bitmap resultingWebcamFrame; 
+        private VideoCapture capture;
+        private Mat currentFrame;
+        private Bitmap resultingWebcamFrame;
+        private Bitmap loadedImage, resultingImage1, resultingImage2, greenscreenImage, backgroundImage;
         private Bitmap capturedFrame;
 
-        private Device[] devices;
-        private Device activeDevice;
-
-        private System.Windows.Forms.Timer processingTimer;
         private enum WebcamFilter
         {
             None,
@@ -29,86 +24,144 @@ namespace Image_Processing
             Sepia,
             Histogram
         }
-
         private WebcamFilter currentFilter = WebcamFilter.None;
+        private System.Windows.Forms.Timer processingTimer;
+        private Bitmap panel1Buffer;
+        private Bitmap panel2Buffer;
 
         public Form1()
         {
             InitializeComponent();
 
+            typeof(Panel).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic,
+                null, panel1, new object[] { true });
+
+            typeof(Panel).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic,
+                null, panel2, new object[] { true });
+
             processingTimer = new System.Windows.Forms.Timer();
-            processingTimer.Interval = 100; 
+            processingTimer.Interval = 33;
             processingTimer.Tick += ProcessingTimer_Tick;
-            processingTimer.Start();
         }
 
-        private void ProcessingTimer_Tick(object sender, EventArgs e)
+        private void InitializeBuffers(int width, int height)
         {
-            if (activeDevice == null) return;
+            panel1Buffer?.Dispose();
+            panel2Buffer?.Dispose();
 
-            try
+            panel1Buffer = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+            panel2Buffer = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+
+            panel1.BackgroundImage = panel1Buffer;
+            panel2.BackgroundImage = panel2Buffer;
+            panel1.BackgroundImageLayout = ImageLayout.Stretch;
+            panel2.BackgroundImageLayout = ImageLayout.Stretch;
+        }
+
+        private unsafe void ProcessingTimer_Tick(object sender, EventArgs e)
+        {
+            if (capture == null) return;
+            capture.Read(currentFrame);
+            if (currentFrame.IsEmpty) return;
+
+            Bitmap frameBitmap = currentFrame.ToBitmap();
+
+            using (Graphics g = Graphics.FromImage(panel1Buffer))
+                g.DrawImage(frameBitmap, 0, 0, panel1Buffer.Width, panel1Buffer.Height);
+
+            if (currentFilter != WebcamFilter.None)
             {
-                activeDevice.Sendmessage();
-                IDataObject data = Clipboard.GetDataObject();
-
-                if (data == null || !data.GetDataPresent(DataFormats.Bitmap)) return;
-
-                capturedFrame?.Dispose();
-                capturedFrame = (Bitmap)data.GetData(DataFormats.Bitmap);
-
-                if (capturedFrame != null)
+                if (currentFilter == WebcamFilter.Histogram)
                 {
-                    panel1.BackgroundImage?.Dispose();
-                    panel1.BackgroundImage = (Bitmap)capturedFrame.Clone();
-                    panel1.BackgroundImageLayout = ImageLayout.Stretch;
-                }
+                    int[][] hist = BitmapFilter.GetRGBHistogram(frameBitmap);
 
-                if (currentFilter == WebcamFilter.None) return;
+                    Bitmap histImage = BitmapFilter.DrawRGBHistogram(hist, panel2Buffer.Width, panel2Buffer.Height);
 
-                Bitmap processedFrame = null;
-
-                if (capturedFrame != null)
-                {
-                    switch (currentFilter)
+                    using (Graphics g = Graphics.FromImage(panel2Buffer))
                     {
-                        case WebcamFilter.GrayScale:
-                            processedFrame = (Bitmap)capturedFrame.Clone();
-                            BitmapFilter.GrayScale(processedFrame);
-                            break;
-
-                        case WebcamFilter.Invert:
-                            processedFrame = (Bitmap)capturedFrame.Clone();
-                            BitmapFilter.Invert(processedFrame);
-                            break;
-
-                        case WebcamFilter.Sepia:
-                            processedFrame = (Bitmap)capturedFrame.Clone();
-                            BitmapFilter.Sepia(processedFrame);
-                            break;
-
-                        case WebcamFilter.Histogram:
-                            int[][] hist = BitmapFilter.GetRGBHistogram(capturedFrame);
-                            processedFrame = BitmapFilter.DrawRGBHistogram(hist, panel2.Width, panel2.Height);
-                            panel2.BackColor = Color.Black; 
-                            break;
+                        g.Clear(Color.Black); 
+                        g.DrawImage(histImage, 0, 0, panel2Buffer.Width, panel2Buffer.Height);
                     }
 
-                    panel2.BackgroundImage?.Dispose();
-                    panel2.BackgroundImage = processedFrame;
-                    panel2.BackgroundImageLayout = ImageLayout.Stretch;
+                    histImage.Dispose();
 
                     resultingWebcamFrame?.Dispose();
-                    resultingWebcamFrame = (Bitmap)processedFrame.Clone();
+                    resultingWebcamFrame = (Bitmap)panel2Buffer.Clone();
+                }
+                else
+                {
+                    BitmapData srcData = frameBitmap.LockBits(
+                        new Rectangle(0, 0, frameBitmap.Width, frameBitmap.Height),
+                        ImageLockMode.ReadOnly, frameBitmap.PixelFormat);
+
+                    BitmapData dstData = panel2Buffer.LockBits(
+                        new Rectangle(0, 0, panel2Buffer.Width, panel2Buffer.Height),
+                        ImageLockMode.WriteOnly, panel2Buffer.PixelFormat);
+
+                    int bytesPerPixel = Image.GetPixelFormatSize(frameBitmap.PixelFormat) / 8;
+                    int height = frameBitmap.Height;
+                    int width = frameBitmap.Width;
+
+                    byte* srcPtr = (byte*)srcData.Scan0;
+                    byte* dstPtr = (byte*)dstData.Scan0;
+                    int srcStride = srcData.Stride;
+                    int dstStride = dstData.Stride;
+
+                    for (int y = 0; y < height; y++)
+                    {
+                        byte* srcRow = srcPtr + (y * srcStride);
+                        byte* dstRow = dstPtr + (y * dstStride);
+
+                        for (int x = 0; x < width; x++)
+                        {
+                            byte b = srcRow[x * bytesPerPixel + 0];
+                            byte g = srcRow[x * bytesPerPixel + 1];
+                            byte r = srcRow[x * bytesPerPixel + 2];
+
+                            switch (currentFilter)
+                            {
+                                case WebcamFilter.GrayScale:
+                                    byte gray = (byte)((r + g + b) / 3);
+                                    dstRow[x * bytesPerPixel + 0] = gray;
+                                    dstRow[x * bytesPerPixel + 1] = gray;
+                                    dstRow[x * bytesPerPixel + 2] = gray;
+                                    break;
+
+                                case WebcamFilter.Invert:
+                                    dstRow[x * bytesPerPixel + 0] = (byte)(255 - b);
+                                    dstRow[x * bytesPerPixel + 1] = (byte)(255 - g);
+                                    dstRow[x * bytesPerPixel + 2] = (byte)(255 - r);
+                                    break;
+
+                                case WebcamFilter.Sepia:
+                                    int tr = (int)(0.393 * r + 0.769 * g + 0.189 * b);
+                                    int tg = (int)(0.349 * r + 0.686 * g + 0.168 * b);
+                                    int tb = (int)(0.272 * r + 0.534 * g + 0.131 * b);
+                                    dstRow[x * bytesPerPixel + 0] = (byte)Math.Min(255, tb);
+                                    dstRow[x * bytesPerPixel + 1] = (byte)Math.Min(255, tg);
+                                    dstRow[x * bytesPerPixel + 2] = (byte)Math.Min(255, tr);
+                                    break;
+                            }
+                        }
+                    }
+
+                    frameBitmap.UnlockBits(srcData);
+                    panel2Buffer.UnlockBits(dstData);
+
+                    resultingWebcamFrame?.Dispose();
+                    resultingWebcamFrame = (Bitmap)panel2Buffer.Clone();
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("ProcessingTimer error: " + ex.Message);
-            }
+
+            panel1.Invalidate();
+            panel2.Invalidate();
         }
-
-
-
 
         private void loadToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -242,16 +295,13 @@ namespace Image_Processing
             }
             else if (capturedFrame != null)
             {
-                currentFilter = WebcamFilter.Histogram; 
+                currentFilter = WebcamFilter.Histogram;
             }
             else
             {
                 MessageBox.Show("No image or webcam frame available for Histogram!");
             }
         }
-
-
-
 
         private void sepiaToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -375,51 +425,43 @@ namespace Image_Processing
 
         private void startWebCamToolStripMenuItem1_Click(object sender, EventArgs e)
         {
-            if (activeDevice != null)
+            if (capture != null)
             {
                 MessageBox.Show("Webcam already running!");
                 return;
             }
 
-            devices = DeviceManager.GetAllDevices();
-            if (devices.Length == 0)
-            {
-                MessageBox.Show("No webcam detected!");
-                return;
-            }
-
-            activeDevice = Array.Find(devices, d => d.Name.Contains("ManyCam")) ?? devices[0];
-
             try
             {
-                activeDevice.ShowWindow(panel1); 
-                panel1.Refresh();
+                capture = new VideoCapture(0, VideoCapture.API.DShow);
+                currentFrame = new Mat();
+
+                int width = capture.Width > 0 ? capture.Width : panel1.Width;
+                int height = capture.Height > 0 ? capture.Height : panel1.Height;
+                InitializeBuffers(width, height);
+
+                processingTimer.Start();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Failed to start webcam: " + ex.Message);
-                activeDevice = null;
+                capture = null;
             }
         }
 
+
         private void stopToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (activeDevice == null) return;
-
-            try
+            if (capture != null)
             {
-                activeDevice.Stop();
+                processingTimer.Stop();
+                capture.Dispose();
+                capture = null;
+
                 panel1.BackgroundImage?.Dispose();
-                panel1.BackgroundImage = null;
-
                 panel2.BackgroundImage?.Dispose();
+                panel1.BackgroundImage = null;
                 panel2.BackgroundImage = null;
-
-                activeDevice = null;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to stop webcam: " + ex.Message);
             }
         }
 
@@ -427,14 +469,12 @@ namespace Image_Processing
         {
             if (resultingWebcamFrame == null)
             {
-                MessageBox.Show("No processed frame available to capture.");
+                MessageBox.Show("No processed frame available.");
                 return;
             }
 
             pictureBox6.Image?.Dispose();
-
             Bitmap resizedCapture = new Bitmap(resultingWebcamFrame, panel2.Width, panel2.Height);
-
             pictureBox6.Image = resizedCapture;
             pictureBox6.SizeMode = PictureBoxSizeMode.StretchImage;
         }
@@ -454,7 +494,11 @@ namespace Image_Processing
             currentFilter = WebcamFilter.Sepia;
         }
 
-        // Optional: Reset to original
+        private void histogramToolStripMenuItem_Click_1(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Histogram;
+        }
+
         private void noFilterToolStripMenuItem_Click(object sender, EventArgs e)
         {
             currentFilter = WebcamFilter.None;
@@ -502,6 +546,5 @@ namespace Image_Processing
                 }
             }
         }
-
     }
 }

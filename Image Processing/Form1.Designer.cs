@@ -60,12 +60,12 @@
             pictureBox4 = new PictureBox();
             pictureBox3 = new PictureBox();
             tabPage3 = new TabPage();
-            label8 = new Label();
-            label7 = new Label();
-            label6 = new Label();
             pictureBox6 = new PictureBox();
             panel2 = new Panel();
             panel1 = new Panel();
+            label8 = new Label();
+            label7 = new Label();
+            label6 = new Label();
             menuStrip3 = new MenuStrip();
             startWebCamToolStripMenuItem1 = new ToolStripMenuItem();
             stopToolStripMenuItem = new ToolStripMenuItem();
@@ -375,12 +375,12 @@
             // 
             // tabPage3
             // 
-            tabPage3.Controls.Add(label8);
-            tabPage3.Controls.Add(label7);
-            tabPage3.Controls.Add(label6);
             tabPage3.Controls.Add(pictureBox6);
             tabPage3.Controls.Add(panel2);
             tabPage3.Controls.Add(panel1);
+            tabPage3.Controls.Add(label8);
+            tabPage3.Controls.Add(label7);
+            tabPage3.Controls.Add(label6);
             tabPage3.Controls.Add(menuStrip3);
             tabPage3.Location = new Point(4, 29);
             tabPage3.Name = "tabPage3";
@@ -389,6 +389,34 @@
             tabPage3.TabIndex = 2;
             tabPage3.Text = "WebCam";
             tabPage3.UseVisualStyleBackColor = true;
+            // 
+            // pictureBox6
+            // 
+            pictureBox6.BackColor = Color.Silver;
+            pictureBox6.BorderStyle = BorderStyle.Fixed3D;
+            pictureBox6.Location = new Point(810, 112);
+            pictureBox6.Name = "pictureBox6";
+            pictureBox6.Size = new Size(300, 300);
+            pictureBox6.TabIndex = 12;
+            pictureBox6.TabStop = false;
+            // 
+            // panel2
+            // 
+            panel2.BackColor = Color.Silver;
+            panel2.BorderStyle = BorderStyle.Fixed3D;
+            panel2.Location = new Point(436, 112);
+            panel2.Name = "panel2";
+            panel2.Size = new Size(300, 300);
+            panel2.TabIndex = 11;
+            // 
+            // panel1
+            // 
+            panel1.BackColor = Color.Silver;
+            panel1.BorderStyle = BorderStyle.Fixed3D;
+            panel1.Location = new Point(64, 112);
+            panel1.Name = "panel1";
+            panel1.Size = new Size(300, 300);
+            panel1.TabIndex = 10;
             // 
             // label8
             // 
@@ -419,35 +447,6 @@
             label6.Size = new Size(112, 18);
             label6.TabIndex = 7;
             label6.Text = "Original Cam";
-            // 
-            // pictureBox6
-            // 
-            pictureBox6.BackColor = Color.Silver;
-            pictureBox6.BorderStyle = BorderStyle.Fixed3D;
-            pictureBox6.Location = new Point(807, 132);
-            pictureBox6.Name = "pictureBox6";
-            pictureBox6.Size = new Size(303, 283);
-            pictureBox6.TabIndex = 6;
-            pictureBox6.TabStop = false;
-            // 
-            // panel2
-            // 
-            panel2.BackColor = Color.Black;
-            panel2.BorderStyle = BorderStyle.Fixed3D;
-            panel2.ForeColor = SystemColors.ActiveBorder;
-            panel2.Location = new Point(431, 134);
-            panel2.Name = "panel2";
-            panel2.Size = new Size(303, 281);
-            panel2.TabIndex = 5;
-            // 
-            // panel1
-            // 
-            panel1.BackColor = Color.Silver;
-            panel1.BorderStyle = BorderStyle.Fixed3D;
-            panel1.Location = new Point(64, 134);
-            panel1.Name = "panel1";
-            panel1.Size = new Size(303, 281);
-            panel1.TabIndex = 4;
             // 
             // menuStrip3
             // 
@@ -497,27 +496,28 @@
             // grayScaleToolStripMenuItem
             // 
             grayScaleToolStripMenuItem.Name = "grayScaleToolStripMenuItem";
-            grayScaleToolStripMenuItem.Size = new Size(175, 26);
+            grayScaleToolStripMenuItem.Size = new Size(224, 26);
             grayScaleToolStripMenuItem.Text = "GrayScale";
             grayScaleToolStripMenuItem.Click += grayScaleToolStripMenuItem_Click_1;
             // 
             // invertColorsToolStripMenuItem
             // 
             invertColorsToolStripMenuItem.Name = "invertColorsToolStripMenuItem";
-            invertColorsToolStripMenuItem.Size = new Size(175, 26);
+            invertColorsToolStripMenuItem.Size = new Size(224, 26);
             invertColorsToolStripMenuItem.Text = "Invert Colors";
             invertColorsToolStripMenuItem.Click += invertColorsToolStripMenuItem_Click;
             // 
             // histogramToolStripMenuItem
             // 
             histogramToolStripMenuItem.Name = "histogramToolStripMenuItem";
-            histogramToolStripMenuItem.Size = new Size(175, 26);
+            histogramToolStripMenuItem.Size = new Size(224, 26);
             histogramToolStripMenuItem.Text = "Histogram";
+            histogramToolStripMenuItem.Click += histogramToolStripMenuItem_Click_1;
             // 
             // sepiaToolStripMenuItem
             // 
             sepiaToolStripMenuItem.Name = "sepiaToolStripMenuItem";
-            sepiaToolStripMenuItem.Size = new Size(175, 26);
+            sepiaToolStripMenuItem.Size = new Size(224, 26);
             sepiaToolStripMenuItem.Text = "Sepia";
             sepiaToolStripMenuItem.Click += sepiaToolStripMenuItem_Click_1;
             // 
@@ -612,12 +612,12 @@
         private ToolStripMenuItem histogramToolStripMenuItem;
         private ToolStripMenuItem sepiaToolStripMenuItem;
         private ToolStripMenuItem captureToolStripMenuItem;
-        private Panel panel2;
-        private Panel panel1;
-        private PictureBox pictureBox6;
         private ToolStripMenuItem saveToolStripMenuItem;
         private Label label6;
         private Label label8;
         private Label label7;
+        private PictureBox pictureBox6;
+        private Panel panel2;
+        private Panel panel1;
     }
 }
