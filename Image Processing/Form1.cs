@@ -22,8 +22,19 @@ namespace Image_Processing
             GrayScale,
             Invert,
             Sepia,
-            Histogram
+            Histogram,
+            Smooth,
+            Gaussian,
+            Sharpen,
+            MeanRemoval,
+            HorizontalVertical,
+            AllDirections,
+            Lossy,
+            HorizontalOnly,
+            VerticalOnly,
+            EmbossLaplacian
         }
+
         private WebcamFilter currentFilter = WebcamFilter.None;
         private System.Windows.Forms.Timer processingTimer;
         private Bitmap panel1Buffer;
@@ -72,25 +83,23 @@ namespace Image_Processing
 
             Bitmap frameBitmap = currentFrame.ToBitmap();
 
-            using (Graphics g = Graphics.FromImage(panel1Buffer))
-                g.DrawImage(frameBitmap, 0, 0, panel1Buffer.Width, panel1Buffer.Height);
+            using (Graphics g1 = Graphics.FromImage(panel1Buffer))
+                g1.DrawImage(frameBitmap, 0, 0, panel1Buffer.Width, panel1Buffer.Height);
 
             if (currentFilter != WebcamFilter.None)
             {
                 if (currentFilter == WebcamFilter.Histogram)
                 {
                     int[][] hist = BitmapFilter.GetRGBHistogram(frameBitmap);
-
                     Bitmap histImage = BitmapFilter.DrawRGBHistogram(hist, panel2Buffer.Width, panel2Buffer.Height);
 
-                    using (Graphics g = Graphics.FromImage(panel2Buffer))
+                    using (Graphics g2 = Graphics.FromImage(panel2Buffer))
                     {
-                        g.Clear(Color.Black); 
-                        g.DrawImage(histImage, 0, 0, panel2Buffer.Width, panel2Buffer.Height);
+                        g2.Clear(Color.Black);
+                        g2.DrawImage(histImage, 0, 0, panel2Buffer.Width, panel2Buffer.Height);
                     }
 
                     histImage.Dispose();
-
                     resultingWebcamFrame?.Dispose();
                     resultingWebcamFrame = (Bitmap)panel2Buffer.Clone();
                 }
@@ -113,40 +122,177 @@ namespace Image_Processing
                     int srcStride = srcData.Stride;
                     int dstStride = dstData.Stride;
 
+                    double[,] kernel = null;
+                    double factor = 1.0;
+                    double bias = 0.0;
+
+                    if (currentFilter == WebcamFilter.Smooth)
+                    {
+                        kernel = new double[,] {
+                            { 1, 1, 1 },
+                            { 1, 1, 1 },
+                            { 1, 1, 1 }
+                        };
+                        factor = 1.0 / 9.0;
+                    }
+                    else if (currentFilter == WebcamFilter.Gaussian)
+                    {
+                        kernel = new double[,] {
+                            { 1, 2, 1 },
+                            { 2, 4, 2 },
+                            { 1, 2, 1 }
+                        };
+                        factor = 1.0 / 16.0;
+                    }
+                    else if (currentFilter == WebcamFilter.Sharpen)
+                    {
+                        kernel = new double[,] {
+                                { 0, -2, 0 },
+                                { -2, 11, -2 },
+                                { 0, -2, 0 }
+                            };
+                    }
+                    else if (currentFilter == WebcamFilter.MeanRemoval)
+                    {
+                        kernel = new double[,] {
+                            { -1, -1, -1 },
+                            { -1,  9, -1 },
+                            { -1, -1, -1 }
+                        };
+                    }
+                    else if (currentFilter == WebcamFilter.HorizontalVertical)
+                    {
+                        kernel = new double[,] {
+                            { 0, -1, 0 },
+                            { -1, 4, -1 },
+                            { 0, -1, 0 }
+                        };
+                        factor = 1.0;  
+                        bias = 128;
+                    }
+                    else if (currentFilter == WebcamFilter.AllDirections)
+                    {
+                        kernel = new double[,] {
+                            { -1, -1, -1 },
+                            { -1, 8, -1 },
+                            { -1, -1, -1 }
+                        };
+                        factor = 1.0; 
+                        bias = 128;
+                    }
+                    else if (currentFilter == WebcamFilter.Lossy)
+                    {
+                        kernel = new double[,] {
+                            { 1, -2, 1 },
+                            { -2, 4, -2 },
+                            { -2, 1, -2 }
+                        };
+                        factor = 1.0;  
+                        bias = 128;
+                    }
+                    else if (currentFilter == WebcamFilter.HorizontalOnly)
+                    {
+                        kernel = new double[,] {
+                            { 0, 0, 0 },
+                            { -1, 2, -1 },
+                            { 0, 0, 0 }
+                        };
+                        factor = 1.0; 
+                        bias = 128;
+                    }
+                    else if (currentFilter == WebcamFilter.VerticalOnly)
+                    {
+                        kernel = new double[,] {
+                            { 0, -1, 0 },
+                            { 0,  0, 0 },
+                            { 0,  1, 0 }
+                        };
+                        factor = 1.0;  
+                        bias = 128;
+                    }
+                    else if (currentFilter == WebcamFilter.EmbossLaplacian)
+                    {
+                        kernel = new double[,] {
+                            { -1,  0, -1 },
+                            {  0,  4,  0 },
+                            { -1,  0, -1 }
+                        };
+                        factor = 1.0;  
+                        bias = 128;
+                    }
+                    
+                    int kSize = (kernel != null ? 3 : 0);
+                    int half = kSize / 2;
+
                     for (int y = 0; y < height; y++)
                     {
-                        byte* srcRow = srcPtr + (y * srcStride);
                         byte* dstRow = dstPtr + (y * dstStride);
 
                         for (int x = 0; x < width; x++)
                         {
-                            byte b = srcRow[x * bytesPerPixel + 0];
-                            byte g = srcRow[x * bytesPerPixel + 1];
-                            byte r = srcRow[x * bytesPerPixel + 2];
-
-                            switch (currentFilter)
+                            if (kernel == null)
                             {
-                                case WebcamFilter.GrayScale:
-                                    byte gray = (byte)((r + g + b) / 3);
-                                    dstRow[x * bytesPerPixel + 0] = gray;
-                                    dstRow[x * bytesPerPixel + 1] = gray;
-                                    dstRow[x * bytesPerPixel + 2] = gray;
-                                    break;
+                                byte* srcRow = srcPtr + (y * srcStride);
+                                byte b = srcRow[x * bytesPerPixel + 0];
+                                byte g = srcRow[x * bytesPerPixel + 1];
+                                byte r = srcRow[x * bytesPerPixel + 2];
 
-                                case WebcamFilter.Invert:
-                                    dstRow[x * bytesPerPixel + 0] = (byte)(255 - b);
-                                    dstRow[x * bytesPerPixel + 1] = (byte)(255 - g);
-                                    dstRow[x * bytesPerPixel + 2] = (byte)(255 - r);
-                                    break;
+                                switch (currentFilter)
+                                {
+                                    case WebcamFilter.GrayScale:
+                                        byte gray = (byte)((r + g + b) / 3);
+                                        dstRow[x * bytesPerPixel + 0] = gray;
+                                        dstRow[x * bytesPerPixel + 1] = gray;
+                                        dstRow[x * bytesPerPixel + 2] = gray;
+                                        break;
 
-                                case WebcamFilter.Sepia:
-                                    int tr = (int)(0.393 * r + 0.769 * g + 0.189 * b);
-                                    int tg = (int)(0.349 * r + 0.686 * g + 0.168 * b);
-                                    int tb = (int)(0.272 * r + 0.534 * g + 0.131 * b);
-                                    dstRow[x * bytesPerPixel + 0] = (byte)Math.Min(255, tb);
-                                    dstRow[x * bytesPerPixel + 1] = (byte)Math.Min(255, tg);
-                                    dstRow[x * bytesPerPixel + 2] = (byte)Math.Min(255, tr);
-                                    break;
+                                    case WebcamFilter.Invert:
+                                        dstRow[x * bytesPerPixel + 0] = (byte)(255 - b);
+                                        dstRow[x * bytesPerPixel + 1] = (byte)(255 - g);
+                                        dstRow[x * bytesPerPixel + 2] = (byte)(255 - r);
+                                        break;
+
+                                    case WebcamFilter.Sepia:
+                                        int tr = (int)(0.393 * r + 0.769 * g + 0.189 * b);
+                                        int tg = (int)(0.349 * r + 0.686 * g + 0.168 * b);
+                                        int tb = (int)(0.272 * r + 0.534 * g + 0.131 * b);
+                                        dstRow[x * bytesPerPixel + 0] = (byte)Math.Min(255, tb);
+                                        dstRow[x * bytesPerPixel + 1] = (byte)Math.Min(255, tg);
+                                        dstRow[x * bytesPerPixel + 2] = (byte)Math.Min(255, tr);
+                                        break;
+                                }
+                            }
+                            else
+                            {
+                                double rSum = 0, gSum = 0, bSum = 0;
+
+                                for (int ky = -half; ky <= half; ky++)
+                                {
+                                    int yy = Math.Min(height - 1, Math.Max(0, y + ky));
+                                    byte* nRow = srcPtr + (yy * srcStride);
+
+                                    for (int kx = -half; kx <= half; kx++)
+                                    {
+                                        int xx = Math.Min(width - 1, Math.Max(0, x + kx));
+
+                                        byte nb = nRow[xx * bytesPerPixel + 0];
+                                        byte ng = nRow[xx * bytesPerPixel + 1];
+                                        byte nr = nRow[xx * bytesPerPixel + 2];
+
+                                        double kval = kernel[ky + half, kx + half];
+                                        rSum += nr * kval;
+                                        gSum += ng * kval;
+                                        bSum += nb * kval;
+                                    }
+                                }
+
+                                int newR = Math.Min(255, Math.Max(0, (int)(factor * rSum + bias)));
+                                int newG = Math.Min(255, Math.Max(0, (int)(factor * gSum + bias)));
+                                int newB = Math.Min(255, Math.Max(0, (int)(factor * bSum + bias)));
+
+                                dstRow[x * bytesPerPixel + 0] = (byte)newB;
+                                dstRow[x * bytesPerPixel + 1] = (byte)newG;
+                                dstRow[x * bytesPerPixel + 2] = (byte)newR;
                             }
                         }
                     }
@@ -423,6 +569,8 @@ namespace Image_Processing
             }
         }
 
+
+        //WEBCAM
         private void startWebCamToolStripMenuItem1_Click(object sender, EventArgs e)
         {
             if (capture != null)
@@ -448,7 +596,6 @@ namespace Image_Processing
                 capture = null;
             }
         }
-
 
         private void stopToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -504,6 +651,56 @@ namespace Image_Processing
             currentFilter = WebcamFilter.None;
         }
 
+        private void smoothToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Smooth;
+        }
+
+        private void gaussianBlurToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Gaussian;
+        }
+
+        private void sharpenToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Sharpen;
+        }
+
+        private void meanRemovalToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.MeanRemoval;
+        }
+
+        private void horizontalVerticalToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.HorizontalVertical;
+        }
+
+        private void allDirectionsToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.AllDirections;
+        }
+
+        private void lossyToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.Lossy;
+        }
+
+        private void horizontalOnlyToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.HorizontalOnly;
+        }
+
+        private void verticalOnlyToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.VerticalOnly;
+        }
+
+        private void embossLaplacianToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            currentFilter = WebcamFilter.EmbossLaplacian;
+        }
+
         private void saveToolStripMenuItem_Click_1(object sender, EventArgs e)
         {
             if (pictureBox6.Image == null)
@@ -544,6 +741,234 @@ namespace Image_Processing
                         MessageBox.Show("Error saving image: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
+            }
+        }
+
+
+        //CONVOLUTION PROCESSES
+        private void smoothToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                // Dispose previous result if exists
+                resultingImage1?.Dispose();
+
+                // Clone the loaded image
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                // Apply the 5x5 smooth filter
+                double[,] smoothKernel = ConvolutionFilter.GetSmoothKernel(); // 5x5 kernel
+                Bitmap smoothedImage = ConvolutionFilter.ApplyKernel(resultingImage1, smoothKernel);
+
+                // Dispose the temporary clone
+                resultingImage1.Dispose();
+                resultingImage1 = smoothedImage;
+
+                // Show in PictureBox
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Smooth filter!");
+            }
+        }
+
+        private void gaussianBlurToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] gaussianKernel = ConvolutionFilter.GetGaussianKernel();
+                Bitmap blurredImage = ConvolutionFilter.ApplyKernel(resultingImage1, gaussianKernel);
+
+                resultingImage1.Dispose();
+                resultingImage1 = blurredImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Gaussian Blur!");
+            }
+        }
+
+        private void sharpenToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] sharpenKernel = ConvolutionFilter.GetSharpenKernel();
+                Bitmap sharpenedImage = ConvolutionFilter.ApplyKernel(resultingImage1, sharpenKernel);
+
+                resultingImage1.Dispose();
+                resultingImage1 = sharpenedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Sharpen filter!");
+            }
+        }
+
+        private void meanRemovalToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] meanRemovalKernel = ConvolutionFilter.GetMeanRemovalKernel();
+                Bitmap processedImage = ConvolutionFilter.ApplyKernel(resultingImage1, meanRemovalKernel);
+
+                resultingImage1.Dispose();
+                resultingImage1 = processedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Mean Removal filter!");
+            }
+        }
+
+        private void embossLaplascianToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] embossKernel = ConvolutionFilter.GetEmbossLaplacianKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, embossKernel);
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Emboss/Laplacian filter!");
+            }
+        }
+
+        private void horizontalVerticalToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] embossHVKernel = ConvolutionFilter.GetEmbossHVKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, embossHVKernel);
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Horizontal/Vertical Emboss filter!");
+            }
+        }
+
+        private void allDirectionsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] embossAllKernel = ConvolutionFilter.GetEmbossAllKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, embossAllKernel, bias: 128); // add bias for visibility
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying All-direction Emboss filter!");
+            }
+        }
+
+        private void lossyToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] lossyKernel = ConvolutionFilter.GetEmbossLossyKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, lossyKernel, 128);
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Lossy Emboss filter!");
+            }
+        }
+
+        private void horizontalOnlyToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] horizontalKernel = ConvolutionFilter.GetEmbossHorizontalKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, horizontalKernel, 128);
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Horizontal Emboss filter!");
+            }
+        }
+
+        private void verticalOnlyToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (loadedImage != null)
+            {
+                resultingImage1?.Dispose();
+                resultingImage1 = (Bitmap)loadedImage.Clone();
+
+                double[,] verticalKernel = ConvolutionFilter.GetEmbossVerticalKernel();
+                Bitmap embossedImage = ConvolutionFilter.ApplyKernel(resultingImage1, verticalKernel, 128);
+
+                resultingImage1.Dispose();
+                resultingImage1 = embossedImage;
+
+                pictureBox2.Image = resultingImage1;
+                pictureBox2.SizeMode = PictureBoxSizeMode.Zoom;
+            }
+            else
+            {
+                MessageBox.Show("Load an image before applying Vertical Emboss filter!");
             }
         }
     }

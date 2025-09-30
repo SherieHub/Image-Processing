@@ -135,10 +135,6 @@ namespace Image_Processing
             return bmp;
         }
 
-
-
-
-
         public static Bitmap GreenScreen(Bitmap greenscreenImage, Bitmap background)
         {
             Bitmap result = new Bitmap(greenscreenImage.Width, greenscreenImage.Height);
